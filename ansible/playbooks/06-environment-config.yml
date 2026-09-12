@@ -1,0 +1,71 @@
+---
+- name: Environment Configuration
+  hosts: webservers
+  become: yes
+  vars:
+    app_dir: /opt/photostudio
+    secret_key: "{{ lookup('env', 'SECRET_KEY') | default('change-this-secret-key-in-production', true) }}"
+
+  tasks:
+    - name: Create .env file for production
+      copy:
+        dest: "{{ app_dir }}/.env"
+        content: |
+          # Secret key for JWT authentication
+          SECRET_KEY={{ secret_key }}
+
+          # Database configuration
+          DATABASE_URL=sqlite:///./data/inventory.db
+
+          # API configuration
+          VITE_API_URL=http://localhost:8000/api
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create backend .env file
+      copy:
+        dest: "{{ app_dir }}/backend/.env"
+        content: |
+          # Secret key for JWT authentication
+          SECRET_KEY={{ secret_key }}
+
+          # Database configuration
+          DATABASE_URL=sqlite:///./data/inventory.db
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create frontend .env file
+      copy:
+        dest: "{{ app_dir }}/frontend/.env"
+        content: |
+          # API configuration
+          VITE_API_URL=http://localhost:8000/api
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Generate random secret key if not provided
+      shell: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+      register: generated_secret
+      when: secret_key == 'change-this-secret-key-in-production'
+      changed_when: false
+
+    - name: Update .env with generated secret key
+      lineinfile:
+        path: "{{ app_dir }}/.env"
+        regexp: '^SECRET_KEY='
+        line: "SECRET_KEY={{ generated_secret.stdout }}"
+      when: secret_key == 'change-this-secret-key-in-production'
+
+    - name: Update backend .env with generated secret key
+      lineinfile:
+        path: "{{ app_dir }}/backend/.env"
+        regexp: '^SECRET_KEY='
+        line: "SECRET_KEY={{ generated_secret.stdout }}"
+      when: secret_key == 'change-this-secret-key-in-production'
+
+    - name: Display environment configuration status
+      debug:
+        msg: "Environment files configured at {{ app_dir }}"

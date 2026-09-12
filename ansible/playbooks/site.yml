@@ -1,0 +1,46 @@
+---
+- name: Complete PhotoStudio Deployment
+  hosts: webservers
+  become: yes
+
+  tasks:
+    - name: Display deployment start message
+      debug:
+        msg: "Starting PhotoStudio deployment process..."
+
+- name: Import Ubuntu server setup playbook
+  import_playbook: 01-ubuntu-setup.yml
+
+- name: Import Docker installation playbook
+  import_playbook: 02-docker-install.yml
+
+- name: Import Git installation playbook
+  import_playbook: 03-git-install.yml
+
+- name: Import firewall configuration playbook
+  import_playbook: 04-firewall-config.yml
+
+- name: Import application deployment playbook
+  import_playbook: 05-app-deployment.yml
+
+- name: Import environment configuration playbook
+  import_playbook: 06-environment-config.yml
+
+- name: Import Docker Compose startup/update playbook
+  import_playbook: 07-docker-compose.yml
+
+- name: Display deployment completion message
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Final success message
+      debug:
+        msg:
+          - "=========================================="
+          - "PhotoStudio Deployment Complete!"
+          - "=========================================="
+          - "Frontend URL: http://YOUR_SERVER_IP:3000"
+          - "Backend API: http://YOUR_SERVER_IP:8000"
+          - "API Docs: http://YOUR_SERVER_IP:8000/docs"
+          - "Default credentials: admin / admin123"
+          - "=========================================="

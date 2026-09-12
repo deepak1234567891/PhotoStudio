@@ -1,0 +1,57 @@
+---
+- name: Application Deployment
+  hosts: webservers
+  become: yes
+  vars:
+    app_dir: /opt/photostudio
+    repo_url: https://github.com/deepak1234567891/PhotoStudio.git
+    repo_branch: main
+
+  tasks:
+    - name: Clone or update repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: "{{ repo_branch }}"
+        force: yes
+        update: yes
+      register: git_result
+
+    - name: Set ownership of application directory
+      file:
+        path: "{{ app_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: yes
+
+    - name: Create logs directory
+      file:
+        path: "{{ app_dir }}/logs"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create backend data directory
+      file:
+        path: "{{ app_dir }}/backend/data"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Check if .env file exists
+      stat:
+        path: "{{ app_dir }}/.env"
+      register: env_file
+
+    - name: Copy .env.example to .env if it doesn't exist
+      copy:
+        src: "{{ app_dir }}/.env.example"
+        dest: "{{ app_dir }}/.env"
+        remote_src: yes
+      when: not env_file.stat.exists
+
+    - name: Display git deployment status
+      debug:
+        msg: "Repository {{ 'updated' if git_result.changed else 'already up to date' }} at {{ git_result.after }}"

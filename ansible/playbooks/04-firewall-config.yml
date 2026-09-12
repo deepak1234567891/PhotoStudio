@@ -1,0 +1,49 @@
+---
+- name: Firewall Configuration
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Install UFW firewall
+      apt:
+        name: ufw
+        state: present
+
+    - name: Allow SSH connections
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Allow HTTP traffic
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+
+    - name: Allow HTTPS traffic
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+
+    - name: Allow application ports (React frontend and FastAPI backend)
+      ufw:
+        rule: allow
+        port: '{{ item }}'
+        proto: tcp
+      loop:
+        - '3000'  # React frontend
+        - '8000'  # FastAPI backend
+
+    - name: Enable UFW firewall
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Check UFW status
+      command: ufw status
+      register: ufw_status
+      changed_when: false
+
+    - name: Display UFW status
+      debug:
+        var: ufw_status.stdout_lines

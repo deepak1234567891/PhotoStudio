@@ -1,0 +1,36 @@
+---
+- name: Git Installation
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Install Git
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+
+    - name: Configure Git user name
+      command: git config --global user.name "PhotoStudio Deployment"
+
+    - name: Configure Git user email
+      command: git config --global user.email "deploy@photostudio.local"
+
+    - name: Create SSH directory for user
+      file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Add GitHub to known hosts
+      shell: ssh-keyscan github.com >> /home/{{ ansible_user }}/.ssh/known_hosts
+      args:
+        creates: /home/{{ ansible_user }}/.ssh/known_hosts
+
+    - name: Set proper permissions on known_hosts
+      file:
+        path: "/home/{{ ansible_user }}/.ssh/known_hosts"
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
