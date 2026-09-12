@@ -1,0 +1,27 @@
+---
+# .ansible-lint configuration
+profile: production
+
+# Exclude paths
+exclude_paths:
+  - .cache/
+  - .github/
+  - venv/
+
+# Enable additional rules
+enable_list:
+  - yaml
+  - name[casing]
+  - name[template]
+
+# Rules configuration
+warn_list:
+  - experimental
+  - ignore-errors
+  - no-changed-when
+  - no-handler
+
+skip_list:
+  - yaml[line-length]
+  - name[casing]
+  - command-instead-of-module

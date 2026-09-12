@@ -27,6 +27,12 @@ A full-stack inventory and billing web application with three core modules — A
 - **Sale Invoice**: Create invoices with multiple items, automatic stock updates, and customer management
 - **Reports**: Comprehensive sales reports, inventory status, and category breakdowns
 - **Authentication**: JWT-based login system
+- **CI/CD Pipeline**: Automated testing and deployment with GitHub Actions
+- **Infrastructure as Code**: Ansible playbooks for automated server setup
+- **Docker Support**: Containerized deployment with Docker Compose
+- **Monitoring**: Prometheus and Grafana integration
+- **SSL/HTTPS**: Let's Encrypt automatic SSL certificates
+- **Backups**: Automated database backups with retention policy
 
 ## Project Structure
 
@@ -198,12 +204,55 @@ Once the backend is running, you can access the interactive API documentation at
 - Use the interactive docs at `/docs` for API testing
 - Database models are in `models.py`
 - API endpoints are in the `routers/` directory
+- Run tests: `cd backend && pytest`
+- Code quality: `flake8`, `black`, `isort`, `mypy`
 
 ### Frontend Development
 - Vite provides hot module replacement
 - Components are in `src/components/`
 - API calls are centralized in `src/api.js`
 - Tailwind CSS for styling
+- Run tests: `cd frontend && npm test`
+- Code quality: ESLint, TypeScript
+
+## CI/CD Pipeline
+
+The project includes automated CI/CD pipelines using GitHub Actions:
+
+### CI Pipeline (Automated Testing)
+- Runs on every push and pull request
+- Backend tests with pytest and coverage
+- Frontend tests with Jest
+- Code quality checks (linting, formatting)
+- Security scanning with Trivy
+- Docker build validation
+- Ansible playbook validation
+
+### CD Pipeline (Automated Deployment)
+- Automatic deployment to staging on main branch
+- Manual deployment to production
+- Docker image building and pushing
+- Health checks after deployment
+- Automatic rollback on failure
+
+**Setup:** See [CI_CD_SETUP.md](CI_CD_SETUP.md) for detailed configuration instructions.
+
+## Deployment
+
+### Ansible Deployment
+The project includes Ansible playbooks for automated server deployment:
+
+- **Minimal deployment**: Basic setup without SSL/monitoring
+- **Complete deployment**: Full setup with SSL, backups, monitoring
+- **Individual playbooks**: Add features gradually
+
+**Quick start:** See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for step-by-step instructions.
+
+### Docker Deployment
+- Backend: Dockerfile with Python 3.11
+- Frontend: Multi-stage build with nginx
+- Docker Compose for local development
+- Production-ready configurations
 
 ## Troubleshooting
 
@@ -219,6 +268,12 @@ Once the backend is running, you can access the interactive API documentation at
 ### Import Errors
 - Ensure all dependencies are installed
 - Check that the virtual environment is activated
+
+### CI/CD Pipeline Issues
+- Check GitHub Actions logs for detailed error messages
+- Verify all required secrets are configured
+- Test playbooks locally before deploying
+- Review [CI_CD_SETUP.md](CI_CD_SETUP.md) for troubleshooting
 
 ## Security Notes
 
