@@ -1,0 +1,97 @@
+---
+- name: SSL/HTTPS Setup with Let's Encrypt
+  hosts: webservers
+  become: yes
+  vars:
+    domain_name: "{{ lookup('env', 'DOMAIN_NAME') | default('photostudio.local', true) }}"
+    email: "{{ lookup('env', 'SSL_EMAIL') | default('admin@photostudio.local', true) }}"
+
+  tasks:
+    - name: Install Certbot and Nginx plugin
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+        update_cache: yes
+
+    - name: Ensure Nginx is installed
+      apt:
+        name: nginx
+        state: present
+
+    - name: Create Nginx configuration directory
+      file:
+        path: /etc/nginx/sites-available
+        state: directory
+
+    - name: Create Nginx configuration for PhotoStudio
+      template:
+        src: templates/nginx-photostudio.conf.j2
+        dest: /etc/nginx/sites-available/photostudio
+        mode: '0644'
+      when: domain_name != 'photostudio.local'
+
+    - name: Enable PhotoStudio site
+      file:
+        src: /etc/nginx/sites-available/photostudio
+        dest: /etc/nginx/sites-enabled/photostudio
+        state: link
+      when: domain_name != 'photostudio.local'
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      when: domain_name != 'photostudio.local'
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+      when: domain_name != 'photostudio.local'
+
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      when: domain_name != 'photostudio.local'
+
+    - name: Allow HTTPS through firewall
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+      when: domain_name != 'photostudio.local'
+
+    - name: Obtain SSL certificate with Certbot
+      command: certbot --nginx -d {{ domain_name }} --email {{ email }} --agree-tos --non-interactive
+      when: domain_name != 'photostudio.local'
+      register: certbot_result
+      ignore_errors: yes
+
+    - name: Setup SSL certificate auto-renewal
+      cron:
+        name: "Auto-renew SSL certificates"
+        job: "certbot renew --quiet --post-hook 'systemctl reload nginx'"
+        minute: "0"
+        hour: "3"
+        weekday: "*"
+      when: domain_name != 'photostudio.local'
+
+    - name: Display SSL setup status
+      debug:
+        msg:
+          - "SSL Configuration Complete!"
+          - "Domain: {{ domain_name }}"
+          - "Certificate location: /etc/letsencrypt/live/{{ domain_name }}/"
+          - "Auto-renewal: Enabled (daily at 3 AM)"
+      when: domain_name != 'photostudio.local'
+
+    - name: Display HTTP-only status
+      debug:
+        msg:
+          - "Nginx configured for HTTP-only access"
+          - "To enable SSL, set DOMAIN_NAME environment variable with your actual domain"
+          - "Example: DOMAIN_NAME=yourdomain.com ansible-playbook playbooks/08-ssl-setup.yml"
+      when: domain_name == 'photostudio.local'

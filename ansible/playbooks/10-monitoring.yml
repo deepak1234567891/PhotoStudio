@@ -1,0 +1,198 @@
+---
+- name: Monitoring Setup with Prometheus and Grafana
+  hosts: webservers
+  become: yes
+  vars:
+    monitoring_dir: /opt/monitoring
+    prometheus_port: 9090
+    grafana_port: 3001
+
+  tasks:
+    - name: Create monitoring directory
+      file:
+        path: "{{ monitoring_dir }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create Prometheus configuration
+      copy:
+        dest: "{{ monitoring_dir }}/prometheus.yml"
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'photostudio-backend'
+              static_configs:
+                - targets: ['photostudio-backend:8000']
+              metrics_path: '/metrics'
+
+            - job_name: 'photostudio-frontend'
+              static_configs:
+                - targets: ['photostudio-frontend:80']
+
+            - job_name: 'docker'
+              static_configs:
+                - targets: ['localhost:9323']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['localhost:9100']
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create Grafana datasource configuration
+      copy:
+        dest: "{{ monitoring_dir }}/grafana-datasources.yml"
+        content: |
+          apiVersion: 1
+
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: true
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create monitoring docker-compose file
+      copy:
+        dest: "{{ monitoring_dir }}/docker-compose.yml"
+        content: |
+          version: '3.8'
+
+          services:
+            prometheus:
+              image: prom/prometheus:latest
+              container_name: prometheus
+              ports:
+                - "{{ prometheus_port }}:9090"
+              volumes:
+                - ./prometheus.yml:/etc/prometheus/prometheus.yml
+                - prometheus_data:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+                - '--web.console.templates=/usr/share/prometheus/consoles'
+              restart: unless-stopped
+
+            grafana:
+              image: grafana/grafana:latest
+              container_name: grafana
+              ports:
+                - "{{ grafana_port }}:3000"
+              environment:
+                - GF_SECURITY_ADMIN_USER=admin
+                - GF_SECURITY_ADMIN_PASSWORD=admin123
+                - GF_USERS_ALLOW_SIGN_UP=false
+              volumes:
+                - grafana_data:/var/lib/grafana
+                - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+              depends_on:
+                - prometheus
+              restart: unless-stopped
+
+            node_exporter:
+              image: prom/node-exporter:latest
+              container_name: node_exporter
+              ports:
+                - '9100:9100'
+              command:
+                - '--path.procfs=/host/proc'
+                - '--path.sysfs=/host/sys'
+                - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+              volumes:
+                - /proc:/host/proc:ro
+                - /sys:/host/sys:ro
+                - /:/rootfs:ro
+              restart: unless-stopped
+
+            cAdvisor:
+              image: gcr.io/cadvisor/cadvisor:latest
+              container_name: cadvisor
+              ports:
+                - '9323:8080'
+              volumes:
+                - /:/rootfs:ro
+                - /var/run:/var/run:ro
+                - /sys:/sys:ro
+                - /var/lib/docker/:/var/lib/docker:ro
+              restart: unless-stopped
+
+          volumes:
+            prometheus_data:
+            grafana_data:
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Allow monitoring ports through firewall
+      ufw:
+        rule: allow
+        port: '{{ item }}'
+        proto: tcp
+      loop:
+        - '9090'  # Prometheus
+        - '3001'  # Grafana
+        - '9100'  # Node Exporter
+        - '9323'  # cAdvisor
+
+    - name: Start monitoring services
+      shell: cd {{ monitoring_dir }} && docker-compose up -d
+
+    - name: Wait for Prometheus to be ready
+      wait_for:
+        host: localhost
+        port: "{{ prometheus_port }}"
+        delay: 10
+        timeout: 120
+        state: started
+
+    - name: Wait for Grafana to be ready
+      wait_for:
+        host: localhost
+        port: "{{ grafana_port }}"
+        delay: 10
+        timeout: 120
+        state: started
+
+    - name: Create monitoring startup script
+      copy:
+        dest: "{{ monitoring_dir }}/start_monitoring.sh"
+        content: |
+          #!/bin/bash
+          cd {{ monitoring_dir }}
+          docker-compose up -d
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create monitoring stop script
+      copy:
+        dest: "{{ monitoring_dir }}/stop_monitoring.sh"
+        content: |
+          #!/bin/bash
+          cd {{ monitoring_dir }}
+          docker-compose down
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Display monitoring setup status
+      debug:
+        msg:
+          - "Monitoring Setup Complete!"
+          - "Prometheus: http://YOUR_SERVER_IP:{{ prometheus_port }}"
+          - "Grafana: http://YOUR_SERVER_IP:{{ grafana_port }}"
+          - "Grafana credentials: admin / admin123"
+          - "Node Exporter: http://YOUR_SERVER_IP:9100/metrics"
+          - "cAdvisor: http://YOUR_SERVER_IP:9323"
+          - "Monitoring directory: {{ monitoring_dir }}"

@@ -1,12 +1,12 @@
 ---
-- name: Complete PhotoStudio Deployment
+- name: Minimal PhotoStudio Deployment
   hosts: webservers
   become: yes
 
   tasks:
     - name: Display deployment start message
       debug:
-        msg: "Starting PhotoStudio deployment process..."
+        msg: "Starting minimal PhotoStudio deployment process..."
 
 - name: Import Ubuntu server setup playbook
   import_playbook: 01-ubuntu-setup.yml
@@ -29,15 +29,6 @@
 - name: Import Docker Compose startup/update playbook
   import_playbook: 07-docker-compose.yml
 
-- name: Import SSL/HTTPS setup playbook
-  import_playbook: 08-ssl-setup.yml
-
-- name: Import database backup setup playbook
-  import_playbook: 09-database-backup.yml
-
-- name: Import monitoring setup playbook
-  import_playbook: 10-monitoring.yml
-
 - name: Display deployment completion message
   hosts: webservers
   become: yes
@@ -46,13 +37,14 @@
       debug:
         msg:
           - "=========================================="
-          - "PhotoStudio Deployment Complete!"
+          - "PhotoStudio Minimal Deployment Complete!"
           - "=========================================="
           - "Frontend URL: http://YOUR_SERVER_IP:3000"
           - "Backend API: http://YOUR_SERVER_IP:8000"
           - "API Docs: http://YOUR_SERVER_IP:8000/docs"
-          - "Prometheus: http://YOUR_SERVER_IP:9090"
-          - "Grafana: http://YOUR_SERVER_IP:3001 (admin/admin123)"
-          - "Database backups: /opt/backups/photostudio"
           - "Default credentials: admin / admin123"
+          - "=========================================="
+          - "To add SSL/HTTPS: ansible-playbook playbooks/08-ssl-setup.yml"
+          - "To add backups: ansible-playbook playbooks/09-database-backup.yml"
+          - "To add monitoring: ansible-playbook playbooks/10-monitoring.yml"
           - "=========================================="

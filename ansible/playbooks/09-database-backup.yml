@@ -1,0 +1,162 @@
+---
+- name: Database Backup Setup
+  hosts: webservers
+  become: yes
+  vars:
+    app_dir: /opt/photostudio
+    backup_dir: /opt/backups/photostudio
+    retention_days: 7
+
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create backup script
+      copy:
+        dest: "{{ app_dir }}/backup_database.sh"
+        content: |
+          #!/bin/bash
+          # PhotoStudio Database Backup Script
+
+          BACKUP_DIR="{{ backup_dir }}"
+          APP_DIR="{{ app_dir }}"
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="photostudio_backup_${TIMESTAMP}.db"
+          LOG_FILE="{{ backup_dir }}/backup.log"
+
+          # Log function
+          log() {
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+          }
+
+          log "Starting database backup"
+
+          # Copy database file from container
+          if docker exec photostudio-backend test -f /app/data/inventory.db; then
+              docker exec photostudio-backend cp /app/data/inventory.db /tmp/inventory_backup_${TIMESTAMP}.db
+              docker cp photostudio-backend:/tmp/inventory_backup_${TIMESTAMP}.db "${BACKUP_DIR}/${BACKUP_FILE}"
+              docker exec photostudio-backend rm /tmp/inventory_backup_${TIMESTAMP}.db
+              log "Database backup completed: ${BACKUP_FILE}"
+          else
+              log "Error: Database file not found in container"
+              exit 1
+          fi
+
+          # Compress backup
+          gzip "${BACKUP_DIR}/${BACKUP_FILE}"
+          log "Backup compressed: ${BACKUP_FILE}.gz"
+
+          # Clean old backups (keep last {{ retention_days }} days)
+          find "${BACKUP_DIR}" -name "photostudio_backup_*.db.gz" -mtime +{{ retention_days }} -delete
+          log "Old backups cleaned (older than {{ retention_days }} days)"
+
+          log "Backup process completed"
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create restore script
+      copy:
+        dest: "{{ app_dir }}/restore_database.sh"
+        content: |
+          #!/bin/bash
+          # PhotoStudio Database Restore Script
+
+          BACKUP_DIR="{{ backup_dir }}"
+          APP_DIR="{{ app_dir }}"
+
+          if [ -z "$1" ]; then
+              echo "Usage: $0 <backup_file.gz>"
+              echo "Available backups:"
+              ls -lh "${BACKUP_DIR}"/photostudio_backup_*.db.gz
+              exit 1
+          fi
+
+          BACKUP_FILE="$1"
+
+          if [ ! -f "${BACKUP_DIR}/${BACKUP_FILE}" ]; then
+              echo "Error: Backup file not found: ${BACKUP_FILE}"
+              exit 1
+          fi
+
+          echo "Restoring database from ${BACKUP_FILE}..."
+
+          # Decompress backup
+          gunzip -c "${BACKUP_DIR}/${BACKUP_FILE}" > /tmp/restore_inventory.db
+
+          # Copy to container
+          docker cp /tmp/restore_inventory.db photostudio-backend:/tmp/restore_inventory.db
+
+          # Stop container, replace database, start container
+          docker exec photostudio-backend mv /tmp/restore_inventory.db /app/data/inventory.db
+
+          # Restart backend container
+          docker restart photostudio-backend
+
+          # Cleanup
+          rm /tmp/restore_inventory.db
+
+          echo "Database restore completed. Backend container restarted."
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Setup automated daily backup
+      cron:
+        name: "PhotoStudio Database Backup"
+        job: "{{ app_dir }}/backup_database.sh"
+        minute: "0"
+        hour: "2"
+        weekday: "*"
+
+    - name: Setup backup monitoring
+      copy:
+        dest: "{{ app_dir }}/check_backups.sh"
+        content: |
+          #!/bin/bash
+          # Check if backups are being created successfully
+
+          BACKUP_DIR="{{ backup_dir }}"
+          LOG_FILE="{{ backup_dir }}/backup.log"
+
+          # Check for recent backups (last 2 days)
+          RECENT_BACKUPS=$(find "${BACKUP_DIR}" -name "photostudio_backup_*.db.gz" -mtime -2 | wc -l)
+
+          if [ "$RECENT_BACKUPS" -eq 0 ]; then
+              echo "WARNING: No recent backups found in ${BACKUP_DIR}"
+              echo "Last backup entries:"
+              tail -5 "${LOG_FILE}"
+              exit 1
+          else
+              echo "OK: Found ${RECENT_BACKUPS} recent backup(s)"
+              echo "Latest backups:"
+              ls -lh "${BACKUP_DIR}"/photostudio_backup_*.db.gz | tail -3
+              exit 0
+          fi
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create backup monitoring cron job
+      cron:
+        name: "PhotoStudio Backup Monitoring"
+        job: "{{ app_dir }}/check_backups.sh"
+        minute: "30"
+        hour: "8"
+        weekday: "*"
+
+    - name: Display backup setup status
+      debug:
+        msg:
+          - "Database Backup Setup Complete!"
+          - "Backup directory: {{ backup_dir }}"
+          - "Backup script: {{ app_dir }}/backup_database.sh"
+          - "Restore script: {{ app_dir }}/restore_database.sh"
+          - "Automated backups: Daily at 2 AM"
+          - "Retention period: {{ retention_days }} days"
+          - "Monitoring: Daily at 8:30 AM"
