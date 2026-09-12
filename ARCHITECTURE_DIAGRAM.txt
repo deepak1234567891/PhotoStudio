@@ -1,0 +1,145 @@
+PhotoStudio Deployment Architecture Diagram
+===========================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     DEVELOPER WORKSTATION                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │   Code       │  │   Testing    │  │    Git       │           │
+│  │  Changes     │  │  (pytest,    │  │   Commit     │           │
+│  │              │  │   Jest)      │  │              │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         │                  │                  │                   │
+│         └──────────────────┴──────────────────┘                   │
+│                            │                                      │
+│                            │ git push                            │
+└────────────────────────────┼──────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      GITHUB REPOSITORY                             │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              CI PIPELINE (Automated)                     │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │   │
+│  │  │ Backend  │ │ Frontend │ │ Security │ │  Docker  │    │   │
+│  │  │  Tests   │ │  Tests   │ │  Scan    │ │  Build   │    │   │
+│  │  │(pytest)  │ │ (Jest)   │ │(Trivy)   │ │  Test    │    │   │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘    │   │
+│  │       └───────────┴───────────┴───────────┘           │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
+│                         │                                        │
+│  ┌──────────────────────┴───────────────────────────────────┐   │
+│  │              CD PIPELINE (Automated)                     │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │   │
+│  │  │ Staging  │ │Docker   │ │ Health   │ │  Roll-   │    │   │
+│  │  │ Deploy   │ │  Push    │ │  Checks  │ │   back   │    │   │
+│  │  │ (Auto)   │ │          │ │          │ │          │    │   │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘    │   │
+│  │       └───────────┴───────────┴───────────┘           │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
+│                         │                                        │
+│                         │ SSH + Ansible                          │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      UBUNTU SERVER                                │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │              ANSIBLE AUTOMATION                           │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │   │
+│  │  │ Server   │ │  Docker  │ │ Firewall │ │  App     │    │   │
+│  │  │  Setup   │ │ Install  │ │  Config  │ │  Deploy  │    │   │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘    │   │
+│  │       └───────────┴───────────┴───────────┘           │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
+│                         │                                        │
+│  ┌──────────────────────┴───────────────────────────────────┐   │
+│  │              DOCKER COMPOSE                              │   │
+│  │                                                           │   │
+│  │  ┌───────────────────────────────────────────────────┐  │   │
+│  │  │           DOCKER CONTAINERS                        │  │   │
+│  │  │                                                    │  │   │
+│  │  │  ┌──────────────┐  ┌──────────────┐              │  │   │
+│  │  │  │   React      │  │   FastAPI    │              │  │   │
+│  │  │  │  Frontend    │  │   Backend    │              │  │   │
+│  │  │  │  Port: 3000  │  │  Port: 8000  │              │  │   │
+│  │  │  │  nginx       │  │  uvicorn     │              │  │   │
+│  │  │  └──────┬───────┘  └──────┬───────┘              │  │   │
+│  │  │         │                  │                      │  │   │
+│  │  │  ┌──────┴───────┐  ┌──────┴───────┐              │  │   │
+│  │  │  │   SQLite     │  │  Nginx SSL   │              │  │   │
+│  │  │  │  Database    │  │  (Optional)  │              │  │   │
+│  │  │  └─────────────┘  └──────────────┘              │  │   │
+│  │  │                                                    │  │   │
+│  │  └───────────────────────────────────────────────────┘  │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
+│                         │                                        │
+│                         │ HTTP/HTTPS                             │
+└─────────────────────────┼────────────────────────────────────────┘
+                          │
+                          ▼
+              ┌───────────────────────┐
+              │   https://PhotoStudio.com  │
+              │                         │
+              │  ┌─────────────────┐   │
+              │  │   React UI      │   │
+              │  │   Dashboard     │   │
+              │  │   Inventory     │   │
+              │  │   Billing       │   │
+              │  │   Reports       │   │
+              │  └─────────────────┘   │
+              │                         │
+              │  ┌─────────────────┐   │
+              │  │   FastAPI API   │   │
+              │  │   /docs         │   │
+              │  │   /api/*        │   │
+              │  └─────────────────┘   │
+              └───────────────────────┘
+
+TECHNOLOGY STACK:
+==================
+Frontend:    React 19.2.8, Vite 8.2.0, Tailwind CSS 4.3.3
+Backend:     FastAPI 0.104.1, Python 3.11, SQLite
+Infrastructure: Ubuntu 20.04+, Docker, Ansible
+CI/CD:       GitHub Actions
+SSL:         Let's Encrypt (Nginx)
+Monitoring:  Prometheus + Grafana (Optional)
+
+DEPLOYMENT FLOW:
+================
+1. Developer makes code changes
+2. Tests run locally (pytest, Jest)
+3. Git commit and push to main branch
+4. GitHub Actions CI pipeline runs:
+   - Backend tests, Frontend tests, Security scan, Docker build
+5. GitHub Actions CD pipeline triggers:
+   - Staging: Automatic deployment
+   - Production: Manual deployment
+6. Ansible playbooks configure Ubuntu server
+7. Docker Compose builds and starts containers
+8. Nginx handles SSL/HTTPS routing
+9. Application accessible at https://PhotoStudio.com
+
+SECURITY LAYERS:
+================
+1. SSL/TLS Encryption (Let's Encrypt)
+2. Nginx Security Headers
+3. UFW Firewall (Ubuntu)
+4. Docker Container Isolation
+5. FastAPI JWT Authentication
+6. Application-Level Validation
+
+MONITORING (Optional):
+======================
+- Prometheus: Metrics collection
+- Grafana: Visualization dashboards
+- Node Exporter: System metrics
+- cAdvisor: Container metrics
+
+BACKUP STRATEGY:
+================
+- Automated daily database backups
+- 7-day retention policy
+- Manual backup/restore scripts
+- Backup monitoring and alerts
